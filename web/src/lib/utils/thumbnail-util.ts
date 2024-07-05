@@ -1,4 +1,4 @@
-import { i18n } from '$lib/stores/i18n.store';
+import { getFormatterSync } from '$lib/utils/i18n';
 import type { AssetResponseDto } from '@immich/sdk';
 import { fromLocalDateTime } from './timeline-util';
 
@@ -41,7 +41,7 @@ export function getAltText(asset: AssetResponseDto) {
     return asset.exifInfo.description;
   }
 
-  const $t = i18n();
+  const $t = getFormatterSync();
   let altText = $t('image_taken');
 
   if (asset.exifInfo?.city && asset.exifInfo?.country) {
