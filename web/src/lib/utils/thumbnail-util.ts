@@ -59,7 +59,7 @@ export function getAltText(asset: AssetResponseDto) {
         person1: names[0],
         person2: names[1],
         person3: names[2],
-        others: names.length - 2,
+        others: names.length > 3 ? names.length - 2 : 0,
       },
     });
     altText += ` ${namesText}`;

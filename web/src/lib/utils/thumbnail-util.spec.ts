@@ -1,23 +1,12 @@
+import { getFormatterSync } from '$lib/utils/i18n';
 import { getAltText } from '$lib/utils/thumbnail-util';
 import type { AssetResponseDto } from '@immich/sdk';
-import { init, register, waitLocale } from 'svelte-i18n';
+
+vi.mock('$lib/utils/i18n', () => ({
+  getFormatterSync: vi.fn(),
+}));
 
 describe('getAltText', () => {
-  beforeAll(async () => {
-    register('en', () =>
-      Promise.resolve({
-        image_taken: 'Image taken',
-        image_alt_text_date: 'on {date}',
-        image_alt_text_people:
-          '{count, plural, =0 {} =1 {with {person1}} =2 {with {person1} and {person2}} =3 {with {person1}, {person2} and {person3}} other {with {person1}, {person2}, and {others, number} others}}',
-        image_alt_text_place: 'in {city}, {country}',
-      }),
-    );
-
-    await init({ fallbackLocale: 'en' });
-    await waitLocale('en');
-  });
-
   it('returns the description', () => {
     const asset = {
       exifInfo: { description: 'description' },
@@ -30,37 +19,117 @@ describe('getAltText', () => {
       exifInfo: { city: 'city', country: 'country' },
       localDateTime: '2024-01-01T12:00:00.000Z',
     } as AssetResponseDto;
-    expect(getAltText(asset)).toEqual('Image taken in city, country on January 1, 2024');
+    const mockFormatter = getMockFormatter();
+
+    const result = getAltText(asset);
+
+    expect(mockFormatter).toHaveBeenCalledTimes(3);
+    expect(mockFormatter).toHaveBeenNthCalledWith(1, 'image_taken');
+    expect(mockFormatter).toHaveBeenNthCalledWith(2, 'image_alt_text_place', {
+      values: { city: 'city', country: 'country' },
+    });
+    expect(mockFormatter).toHaveBeenNthCalledWith(3, 'image_alt_text_date', {
+      values: { date: 'January 1, 2024' },
+    });
+    expect(result).toEqual('formatted formatted formatted');
   });
 
   // convert the people tests into an it.each
   it.each([
-    [[{ name: 'person' }], 'Image taken with person on January 1, 2024'],
-    [[{ name: 'person1' }, { name: 'person2' }], 'Image taken with person1 and person2 on January 1, 2024'],
+    [
+      [{ name: 'person' }],
+      {
+        count: 1,
+        person1: 'person',
+        person2: undefined,
+        person3: undefined,
+        others: 0,
+      },
+    ],
+    [
+      [{ name: 'person1' }, { name: 'person2' }],
+      {
+        count: 2,
+        person1: 'person1',
+        person2: 'person2',
+        person3: undefined,
+        others: 0,
+      },
+    ],
     [
       [{ name: 'person1' }, { name: 'person2' }, { name: 'person3' }],
-      'Image taken with person1, person2 and person3 on January 1, 2024',
+      {
+        count: 3,
+        person1: 'person1',
+        person2: 'person2',
+        person3: 'person3',
+        others: 0,
+      },
     ],
     [
       [{ name: 'person1' }, { name: 'person2' }, { name: 'person3' }, { name: 'person4' }],
-      'Image taken with person1, person2, and 2 others on January 1, 2024',
+      {
+        count: 4,
+        person1: 'person1',
+        person2: 'person2',
+        person3: 'person3',
+        others: 2,
+      },
     ],
   ])('returns the people, correctly formatted', (people, expected) => {
     const asset = {
       people,
       localDateTime: '2024-01-01T12:00:00.000Z',
     } as AssetResponseDto;
-    expect(getAltText(asset)).toEqual(expected);
+    const mockFormatter = getMockFormatter();
+
+    const result = getAltText(asset);
+
+    expect(mockFormatter).toHaveBeenCalledTimes(3);
+    expect(mockFormatter).toHaveBeenNthCalledWith(1, 'image_taken');
+    expect(mockFormatter).toHaveBeenNthCalledWith(2, 'image_alt_text_people', {
+      values: expected,
+    });
+    expect(mockFormatter).toHaveBeenNthCalledWith(3, 'image_alt_text_date', {
+      values: { date: 'January 1, 2024' },
+    });
+    expect(result).toBe('formatted formatted formatted');
   });
 
   it('returns location, people, and date', () => {
     const asset = {
       exifInfo: { city: 'city', country: 'country' },
-      people: [{ name: 'person1' }, { name: 'person2' }, { name: 'person3' }],
+      people: [{ name: 'person1' }, { name: 'person2' }, { name: 'person3' }, { name: 'person4' }, { name: 'person5' }],
       localDateTime: '2024-01-01T12:00:00.000Z',
     } as AssetResponseDto;
-    expect(getAltText(asset)).toEqual(
-      'Image taken in city, country with person1, person2 and person3 on January 1, 2024',
-    );
+    const mockFormatter = getMockFormatter();
+
+    const result = getAltText(asset);
+
+    expect(mockFormatter).toHaveBeenCalledTimes(4);
+    expect(mockFormatter).toHaveBeenNthCalledWith(1, 'image_taken');
+    expect(mockFormatter).toHaveBeenNthCalledWith(2, 'image_alt_text_place', {
+      values: { city: 'city', country: 'country' },
+    });
+    expect(mockFormatter).toHaveBeenNthCalledWith(3, 'image_alt_text_people', {
+      values: {
+        count: 5,
+        person1: 'person1',
+        person2: 'person2',
+        person3: 'person3',
+        others: 3,
+      },
+    });
+    expect(mockFormatter).toHaveBeenNthCalledWith(4, 'image_alt_text_date', {
+      values: { date: 'January 1, 2024' },
+    });
+    expect(result).toBe('formatted formatted formatted formatted');
   });
 });
+
+function getMockFormatter() {
+  const getter = vi.mocked(getFormatterSync);
+  const mockFormatter = vi.fn().mockReturnValue('formatted');
+  getter.mockReturnValue(mockFormatter);
+  return mockFormatter;
+}
